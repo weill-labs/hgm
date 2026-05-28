@@ -3,3 +3,23 @@
 .dolt/
 *.db
 .beads-credential-key
+
+# Secrets — never commit
+.env
+.env.*
+*.key
+
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Reference clones (spec only, not ours)
+reference/
+reference-mini/
+
+# HGM run artifacts
+output_hgm/
+variants/
+*.traj.json
