@@ -1,6 +1,10 @@
 # Progress — HGM reimplementation
 
-## Status: Phase 1 ✓ and Phase 2 ✓ COMPLETE. 17/17 tests green ($0). Next: Phase 3 (real SWE-bench Lite eval).
+## Status: ALL PHASES DEMONSTRATED LIVE. See RESULTS.md. Total live spend ~$0.46.
+## Live HGM loop ran end-to-end ($0.385): initial 1/3; 3 self-improved children each doubled
+## step_limit 12->24 + expanded prompts (undid the handicap), but tested once each -> no measured
+## lift (expected at 6-eval scale). CMP>greedy confirmed in $0 simulation. Full repro needs the
+## paper's hundreds-of-evals budget. Committed on branch reproduce-hgm.
 ## Issue tracking: beads (bd). hgm-tji ✓, hgm-6ne ✓, hgm-3vh (Phase 3) ready.
 ## Phase 1 result: CMP +0.055 mean skill vs greedy (40 seeds, wins 21/40); advantage is an
 ##   inverted-U in drift variance (peaks ~0.04) — floor/ceiling effects squeeze both ends.
