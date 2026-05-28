@@ -16,6 +16,24 @@ from minisweagent.models.litellm_model import LitellmModel
 # bigger-budget run (much pricier / slower).
 SOLVER_MODEL = "gpt-5.4"
 
+# The deliberate handicap that gives self-improvement headroom. The baseline and the HGM
+# loop MUST start from this same config, so it lives here (one source of truth).
+HANDICAP_SYSTEM = "You are an assistant. Use bash to fix the bug, then submit a patch."
+HANDICAP_STEP_LIMIT = 12
+
+
+def handicapped_config() -> dict:
+    """Bundled SWE-bench config, weakened: terse system prompt + low step limit.
+
+    This is the base agent both the baseline measurement and the HGM loop start from.
+    """
+    from hgm.variant import initial_swebench_config
+
+    cfg = initial_swebench_config()
+    cfg["agent"]["system_template"] = HANDICAP_SYSTEM
+    cfg["agent"]["step_limit"] = HANDICAP_STEP_LIMIT
+    return cfg
+
 
 def make_litellm_model(
     model_name: str = SOLVER_MODEL, model_kwargs: dict | None = None

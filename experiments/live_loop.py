@@ -21,8 +21,6 @@ MAX_TASK_EVALS = 6  # total solve+score steps across the whole tree
 INIT_MEASUREMENTS = 2  # seed the root before expanding
 SPEND_CAP_USD = 8.0  # global hard cap
 MAX_RUN_COST_USD = 1.0  # per-solve ceiling
-SOLVER_STEP_LIMIT = 12  # the handicap: few steps to fix a bug
-HANDICAP_SYSTEM = "You are an assistant. Use bash to fix the bug, then submit a patch."
 
 
 def _load_openai_key() -> None:
@@ -42,16 +40,6 @@ def _load_openai_key() -> None:
                 return
 
 
-def handicapped_config() -> dict:
-    """Bundled SWE-bench config, weakened: terse system prompt + low step limit."""
-    from hgm.variant import initial_swebench_config
-
-    cfg = initial_swebench_config()
-    cfg["agent"]["system_template"] = HANDICAP_SYSTEM
-    cfg["agent"]["step_limit"] = SOLVER_STEP_LIMIT
-    return cfg
-
-
 def main() -> int:
     _load_openai_key()
     if not os.getenv("OPENAI_API_KEY"):
@@ -59,7 +47,9 @@ def main() -> int:
         return 2
 
     from hgm.real_backend import (
+        HANDICAP_STEP_LIMIT,
         SOLVER_MODEL,
+        handicapped_config,
         make_docker_env,
         make_litellm_model,
         make_selfimprove_sandbox_env,
@@ -108,7 +98,7 @@ def main() -> int:
         seed=0,
     )
 
-    print(f"Model {SOLVER_MODEL} | handicap step_limit={SOLVER_STEP_LIMIT}")
+    print(f"Model {SOLVER_MODEL} | handicap step_limit={HANDICAP_STEP_LIMIT}")
     print(f"Instances ({N_INSTANCES}): {instance_ids}")
     print(
         f"Budget: max_task_evals={MAX_TASK_EVALS}, cap=${SPEND_CAP_USD}, per-run=${MAX_RUN_COST_USD}\n"
