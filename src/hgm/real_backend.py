@@ -39,9 +39,15 @@ def make_litellm_model(
     model_name: str = SOLVER_MODEL, model_kwargs: dict | None = None
 ):
     """A mini-swe-agent Model backed by litellm/OpenAI. Cost is tracked per call and
-    surfaced as message.extra.cost, which the agent's cost_limit and our SpendGuard read."""
+    surfaced as message.extra.cost, which the agent's cost_limit and our SpendGuard read.
+
+    ``drop_params=True`` lets litellm drop per-model-unsupported params: gpt-5-family
+    models (mini/nano/5.0) reject ``temperature != 1`` and would otherwise raise
+    UnsupportedParamsError; stronger models keep the temperature. Matches the bundled
+    swebench.yaml config."""
     return LitellmModel(
-        model_name=model_name, model_kwargs=model_kwargs or {"temperature": 0.0}
+        model_name=model_name,
+        model_kwargs=model_kwargs or {"temperature": 0.0, "drop_params": True},
     )
 
 
