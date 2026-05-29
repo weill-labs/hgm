@@ -38,6 +38,9 @@ class SearchConfig:
     init_measurements: int = 5  # seed the root with this many evals before searching
     seed: int = 0
     use_cmp: bool = True  # True = HGM (clade); False = greedy/DGM (own evals)
+    max_expansions: int | None = (
+        None  # cap self-improve steps (for compute-matched arms)
+    )
 
 
 @dataclass
@@ -71,11 +74,17 @@ class HGMSearch:
         # tasks already spent on each node id (avoid re-evaluating the same task twice)
         self.submitted: dict[int, set] = {self.root.id: set()}
         self.n_task_evals = 0
+        self.n_expansions = 0
         self.history: list[dict] = []
 
     # --- the two primitive actions (return True iff they made progress) ----------
     def _expand(self) -> bool:
         """Self-improve a promising node (chosen by CMP Thompson Sampling)."""
+        if (
+            self.config.max_expansions is not None
+            and self.n_expansions >= self.config.max_expansions
+        ):
+            return False  # compute-matched cap reached
         candidates = [
             n for n in self.nodes if np.isfinite(n.mean_utility) and n.mean_utility > 0
         ]
@@ -100,6 +109,7 @@ class HGMSearch:
         )
         parent = candidates[idx]
         child_commit = self.improver.improve(parent.commit_id)
+        self.n_expansions += 1  # count the self-improve attempt (success or FAILED)
         if child_commit == FAILED:
             # An attempt was made (and consumed) but yielded no usable variant.
             self.history.append(
