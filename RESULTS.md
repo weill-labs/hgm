@@ -1,7 +1,7 @@
 # Reproduction results — Huxley-Gödel Machine (arXiv:2510.21614)
 
 A clean-room reimplementation, validated bottom-up. Total real LLM spend across **all**
-live experiments: **~$7.65**.
+live experiments: **~$15.1**.
 
 ## What was reproduced
 
@@ -15,6 +15,7 @@ live experiments: **~$7.65**.
 | **Baseline** | handicapped base agent pass@1 on 30 fixed Lite instances | **17/30 = 0.567** | $2.35 |
 | **Live HGM loop** | full search driving real self-improve + real eval, budget-capped | see below | $0.385 |
 | **Harder loop** | step_limit=5 base on failing repos; self-improvement shows | **+0.55 lift** (0.20→0.75) | $4.82 |
+| **Significance** | matched held-out eval, 3 search seeds, McNemar test | 1/3 seeds **significant** (p=0.016) | $7.44 |
 
 ## Baseline: handicapped base agent on 30 fixed Lite instances
 
@@ -132,6 +133,40 @@ were measured on different instance subsets (not a matched head-to-head), so "li
 conflates real improvement with instance-difficulty differences — mitigated, but not
 removed, by the consistent direction across five children.
 
+## Significance test — matched, held-out, 3 seeds
+
+To remove the hard loop's two weaknesses (unmatched subsets, single seed), we ran a
+controlled test. Of 133 hard-repo Lite instances: **20 held out** for evaluation, **113**
+as a disjoint search pool. Three independent HGM searches (seeds 0/1/2, base `step_limit=5`)
+each on 8 pool instances; then **base + each run's best variant evaluated on the same 20
+held-out instances**, with an exact two-sided McNemar paired test. $7.44, ~29 min.
+
+| agent | held-out pass@1 | 95% CI | McNemar vs base |
+|---|---|---|---|
+| base (step_limit=5) | 0/20 = 0.00 | [0.00, 0.16] | – |
+| seed0 best | 1/20 = 0.05 | [0.01, 0.24] | p=1.00 n.s. (search didn't expand) |
+| seed2 best | 1/20 = 0.05 | [0.01, 0.24] | p=1.00 n.s. (search didn't expand) |
+| **seed1 best** | **7/20 = 0.35** | [0.18, 0.57] | **p=0.016 — SIGNIFICANT** |
+
+**The significant result is clean dominance.** seed1's improved agent resolved **7 instances
+the base could not, and lost none** (discordant pairs: improved-only=7, base-only=0) — on
+held-out instances, paired. From a floored 0.00 base to 0.35, p=0.016. That is a real,
+statistically significant self-improvement under a controlled comparison.
+
+**But it is not robust across seeds — and we know exactly why.** Seeds 0 and 2 produced
+*no* improvement because their searches **never expanded**: at `step_limit=5` the base
+solved 0/8 of its search instances, and HGM's expand step only mutates a node with
+`mean_utility > 0` (you can't self-improve from a node that has shown zero signal). With no
+positive signal, those lineages never spawned a child. seed1 happened to solve ≥1 search
+instance early, which unlocked expansion → it found a strong variant.
+
+**Takeaway:** the handicap that made improvement *visible* (step_limit=5) is, for some
+search seeds, *below the traction threshold* — the floor regime again (cf. the simulation's
+inverted-U and the "expand needs mean>0" rule). The Goldilocks base for *robust* gains sits
+between this floor and the too-easy 0.567 baseline (step_limit≈8 is the likely sweet spot:
+weak enough for headroom, strong enough to score >0 on some search instances so expansion
+reliably starts).
+
 ## What a faithful full reproduction would need
 
 - **Hundreds of task-evals** (not 6) so per-variant means and clade pools are meaningful.
@@ -153,8 +188,15 @@ SWE-bench scoring. The simulation independently confirms the core algorithmic cl
 on real SWE-bench instances — from a floored 0.20 base to a self-edited 0.75 variant
 (+0.55), with a visible clade structure (the best variant's parent was itself mediocre).
 
-That last result is *suggestive, not statistically conclusive* at n≈4–10 per variant on
-unmatched instance subsets — a full reproduction of the paper's headline numbers still
-needs its scale (hundreds of evals, matched evaluation, more depth; tens–hundreds of $).
+Under a controlled, matched, held-out test, a discovered agent **significantly** beat the
+base (0.00 → 0.35, McNemar p=0.016, clean 7–0 dominance) — but only 1 of 3 search seeds
+got there; the other two stalled because the step_limit=5 base was below the threshold
+where self-improvement search gains traction. So the honest verdict: **HGM's self-
+improvement is real and can be statistically significant, but its reliability depends on
+starting the search from a base with non-zero signal.** Full reproduction of the paper's
+headline numbers still needs its scale (hundreds of evals, more seeds, a tuned base;
+tens–hundreds of $).
+
 What we have is a correct, tested implementation that exhibits every HGM behavior live for
-**~$7.65 total**, plus a $0 simulation that isolates the CMP-vs-greedy claim.
+**~$15.1 total** — including a statistically significant self-improvement on held-out
+SWE-bench instances — plus a $0 simulation that isolates the CMP-vs-greedy claim.
