@@ -16,18 +16,19 @@ Docker — all under hard spend caps. Total real LLM spend for every live experi
   finds higher-skill agents than the greedy/DGM baseline (+0.055 mean skill over 40 seeds).
   The advantage is an **inverted-U** in lineage-productivity variance — biggest at
   intermediate difficulty.
-- **Live self-improvement is real and can be statistically significant.** Starting from a
-  deliberately crippled agent (0.00 pass@1 on held-out hard SWE-bench instances), HGM
-  discovered a variant scoring **0.35 — McNemar paired test p=0.016, clean 7–0 dominance**
-  (it solved 7 instances the base couldn't and regressed on none), on *matched, held-out*
-  instances.
+- **It significantly rescues a broken agent (live, held-out).** From a deliberately
+  crippled base (0.00 pass@1 on held-out hard SWE-bench instances), HGM discovered a variant
+  scoring **0.35 — McNemar paired p=0.016, clean 7–0** (solved 7 the base couldn't, regressed
+  on none), on *matched, held-out* instances.
+- **But it does *not* improve an already-decent agent at this scale.** Re-run from a
+  competent base (0.26) with proper power (50 held-out instances), the discovered agents
+  show **no net gain** (7–7 and 6–8 discordant pairs, p≈1.0) — the self-edits trade wins for
+  losses on unseen instances. An earlier n=20 positive was small-sample noise; the
+  properly-powered result is a clean null. (This is the scale limitation the simulation's
+  inverted-U predicted.)
 - **The agent rewrites its own scaffold sensibly.** Across generations it raised its own
-  step budget (5→12→20) and enriched its prompts — and the best variant descended from a
+  step budget (5→12→20) and enriched its prompts — and a best variant descended from a
   *mediocre* parent, exactly the clade-credit case CMP is built for.
-- **A quantified base-difficulty trade-off.** Too-weak a base starves the search of
-  traction (2/3 seeds never expand); too-strong removes the headroom (lifts shrink below
-  significance at n=20). The big significant jump and robust multi-seed gains live in
-  different regimes — the inverted-U, now drawn in live SWE-bench data.
 
 Full write-up with tables and honest caveats: **[`RESULTS.md`](RESULTS.md)**.
 
