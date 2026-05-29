@@ -31,17 +31,20 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 HARD_REPO_PREFIXES = ("sphinx-doc__", "pytest-dev__", "matplotlib__", "sympy__")
-N_HELDOUT = 20
+# args: step_limit [n_heldout] [spend_cap]
+HARD_STEP_LIMIT = (
+    int(sys.argv[1]) if len(sys.argv) > 1 else 5
+)  # base handicap (8 = Goldilocks)
+N_HELDOUT = (
+    int(sys.argv[2]) if len(sys.argv) > 2 else 20
+)  # matched held-out size (power)
+SPEND_CAP_USD = float(sys.argv[3]) if len(sys.argv) > 3 else 25.0
 SEARCH_SEEDS = [0, 1, 2]
 SEARCH_INSTANCES = 8
 SEARCH_EVALS = 14
-HARD_STEP_LIMIT = (
-    int(sys.argv[1]) if len(sys.argv) > 1 else 5
-)  # base handicap (try 8 = Goldilocks)
 EVAL_WORKERS = 8
-SPEND_CAP_USD = 25.0
 MAX_RUN_COST_USD = 1.0
-OUT = Path(f"output_hgm/sig_sl{HARD_STEP_LIMIT}")
+OUT = Path(f"output_hgm/sig_sl{HARD_STEP_LIMIT}_n{N_HELDOUT}")
 
 
 def _load_openai_key() -> None:
