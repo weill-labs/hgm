@@ -88,5 +88,14 @@ def make_selfimprove_sandbox_env(
         cwd="/work",
         timeout=timeout,
         pull_timeout=pull_timeout,
-        run_args=["--rm", "-v", f"{os.path.abspath(host_dir)}:/work"],
+        # Run as the host user so files the agent writes into the bind-mounted /work
+        # (e.g. __pycache__) are host-user-owned, not root — otherwise host-side cleanup
+        # and resume fail with permission errors.
+        run_args=[
+            "--rm",
+            "--user",
+            f"{os.getuid()}:{os.getgid()}",
+            "-v",
+            f"{os.path.abspath(host_dir)}:/work",
+        ],
     )
