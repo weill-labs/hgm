@@ -23,6 +23,7 @@ import json
 import math
 import os
 import random
+import shutil
 import sys
 import threading
 import time
@@ -148,6 +149,8 @@ def main() -> int:
     def search_arm(arm: str, seed: int):
         rng = random.Random(7000 + seed)
         insts = sorted(rng.sample(search_pool, min(8, len(search_pool))))
+        # fresh dir per (re)attempt — fork() uses copytree which fails on a stale dir
+        shutil.rmtree(OUT / f"{arm}_s{seed}", ignore_errors=True)
         store = VariantStore(OUT / f"{arm}_s{seed}" / "variants")
         store.create_initial(base_config())
         ev, imp = mk_eval(store, insts), mk_improver(store)
@@ -203,45 +206,86 @@ def main() -> int:
             best = max(cands, key=lambda c: scores[c])
             return store.get(best).load_config()
 
-    log("Stage 1: searches (A/B/C x seeds) concurrently...")
-    jobs = [(arm, s) for s in range(N_SEEDS) for arm in ("A", "B", "C")]
+    # checkpoint dir: each completed arm-seed best config is persisted so a re-launch
+    # skips searches it already finished.
+    cfg_dir = OUT / "agentcfg"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
     agents = {"base": base_config()}
-    with ThreadPoolExecutor(max_workers=min(9, len(jobs))) as ex:
-        futs = {ex.submit(search_arm, arm, s): (arm, s) for arm, s in jobs}
-        for f in as_completed(futs):
-            arm, s = futs[f]
-            try:
-                agents[f"{arm}_s{s}"] = f.result()
-            except Exception as e:
-                log(f"{arm} s{s} FAILED: {type(e).__name__}: {str(e)[:70]}")
+    for f in cfg_dir.glob("*.json"):
+        agents[f.stem] = json.loads(f.read_text())
+    jobs = [
+        (arm, s)
+        for s in range(N_SEEDS)
+        for arm in ("A", "B", "C")
+        if f"{arm}_s{s}" not in agents
+    ]
+    log(
+        f"Stage 1: {len(agents) - 1} arm-seeds cached; running {len(jobs)} concurrently..."
+    )
+    if jobs:
+        with ThreadPoolExecutor(max_workers=min(9, len(jobs))) as ex:
+            futs = {ex.submit(search_arm, arm, s): (arm, s) for arm, s in jobs}
+            for f in as_completed(futs):
+                arm, s = futs[f]
+                try:
+                    cfg = f.result()
+                    agents[f"{arm}_s{s}"] = cfg
+                    (cfg_dir / f"{arm}_s{s}.json").write_text(
+                        json.dumps(cfg)
+                    )  # checkpoint
+                except Exception as e:
+                    log(f"{arm} s{s} FAILED: {type(e).__name__}: {str(e)[:70]}")
 
     # ---- Stage 2: matched held-out eval of every agent ------------------------------------
     mstore = VariantStore(OUT / "matched" / "variants")
     for label, cfg in agents.items():
         mstore.create_initial(cfg, commit_id=label)
     m_eval = mk_eval(mstore, held_out)
-    log(f"Stage 2: matched eval of {len(agents)} agents x {len(held_out)} held-out...")
+    # resume: load already-scored (label, iid) outcomes from the checkpoint log.
     matched = {label: {} for label in agents}
-    pairs = [(label, iid) for label in agents for iid in held_out]
+    matched_path = OUT / "matched.jsonl"
+    if matched_path.exists():
+        for line in matched_path.read_text().splitlines():
+            if line.strip():
+                r = json.loads(line)
+                if r["label"] in matched:
+                    matched[r["label"]][r["iid"]] = r["out"]
+    write_lock = threading.Lock()
+    pairs = [
+        (label, iid)
+        for label in agents
+        for iid in held_out
+        if iid not in matched[label]
+    ]
+    cached = sum(len(v) for v in matched.values())
+    log(f"Stage 2: matched eval, {cached} cached, {len(pairs)} pairs to run...")
 
     def eval_one(label, iid):
         try:
-            return label, iid, m_eval.evaluate(label, iid)
+            out = m_eval.evaluate(label, iid)
         except SpendCapExceeded:
             return label, iid, None
         except Exception:
             return label, iid, None
+        if out is not None:
+            with write_lock:  # checkpoint each result as it lands
+                with open(matched_path, "a") as fh:
+                    fh.write(
+                        json.dumps({"label": label, "iid": iid, "out": int(out)}) + "\n"
+                    )
+        return label, iid, out
 
-    with ThreadPoolExecutor(max_workers=EVAL_WORKERS) as ex:
-        futs = [ex.submit(eval_one, label, iid) for label, iid in pairs]
-        done = 0
-        for f in as_completed(futs):
-            label, iid, out = f.result()
-            done += 1
-            if out is not None:
-                matched[label][iid] = out
-            if done % 25 == 0:
-                log(f"  matched {done}/{len(pairs)}")
+    if pairs:
+        with ThreadPoolExecutor(max_workers=EVAL_WORKERS) as ex:
+            futs = [ex.submit(eval_one, label, iid) for label, iid in pairs]
+            done = 0
+            for f in as_completed(futs):
+                label, iid, out = f.result()
+                done += 1
+                if out is not None:
+                    matched[label][iid] = out
+                if done % 25 == 0:
+                    log(f"  matched {done}/{len(pairs)}")
 
     # ---- Stage 3: stats -------------------------------------------------------------------
     def arm_rate(arm):  # pooled over that arm's seed-agents
