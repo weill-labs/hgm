@@ -24,6 +24,7 @@ import json
 import math
 import os
 import random
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -34,11 +35,13 @@ N_HELDOUT = 20
 SEARCH_SEEDS = [0, 1, 2]
 SEARCH_INSTANCES = 8
 SEARCH_EVALS = 14
-HARD_STEP_LIMIT = 5
+HARD_STEP_LIMIT = (
+    int(sys.argv[1]) if len(sys.argv) > 1 else 5
+)  # base handicap (try 8 = Goldilocks)
 EVAL_WORKERS = 8
 SPEND_CAP_USD = 25.0
 MAX_RUN_COST_USD = 1.0
-OUT = Path("output_hgm/sig")
+OUT = Path(f"output_hgm/sig_sl{HARD_STEP_LIMIT}")
 
 
 def _load_openai_key() -> None:
