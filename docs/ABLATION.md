@@ -86,6 +86,38 @@ the full matrix.
 (parallelized). The expensive piece is the matched eval ((1 base + 3 arms) × 50 × 5 seeds),
 which is embarrassingly parallel.
 
+## Follow-up arm E: population-memory editor (run only after A–D report)
+
+A–D share one blind spot we should name: the **self-improvement step is myopic**. The
+meta-agent that edits a variant sees only its *parent's* files (a forked copy) plus a
+weakness string — never the other variants, their edits, or their scores. Population
+information reaches A/B *only* through the selection policy (CMP / Thompson sampling),
+never into the edit itself. HGM is thus a genetic algorithm: **blind variation +
+population-aware selection**; it does no explicit credit assignment *over edits* ("adding a
+reproduce-step helped across lineages; raising temperature hurt"), so a child can
+re-discover a cousin's dead end and can't stack a cousin's win onto its parent's.
+
+**Arm E — best-of-N with a population-memory editor.** Maintain a shared running log of
+every variant tried: a short summary of *what its edit changed* plus its val score. On each
+`improve()` call, inject the top-k entries into the meta-agent's prompt: "here is what's
+been tried and how it scored — propose a new edit that builds on what worked and avoids
+what failed." Same compute budget (S edits, V evals) and same meta model as A–D.
+
+What E isolates: **does information flowing into the *editor* matter more than search
+structure?** Decision rules (on top of A–D):
+- **E > A and E > C** → the lever is *editor memory* (explicit cross-population learning),
+  not the tree/CMP. The biggest win is telling the mutator what's been tried.
+- **E ≈ A** → at this scale, feeding the editor population history adds nothing over
+  CMP-guided selection.
+
+**Why it's a separate, later arm, not part of the core ablation:** E adds a *second* source
+of population-learning (in-context memory) on top of selection, which would confound the
+clean "is it CMP or just sampling?" question that A-vs-C answers. It's also arguably a
+*different algorithm* — "HGM + population memory", not the paper's HGM. So run A–D first;
+only if the baseline method is interesting (or interestingly null) is E worth the spend.
+Sketch: a thread-safe `dict[variant_id -> (edit_summary, val_score)]`, top-k by score
+injected into `MiniSelfImprover`'s diagnose/prompt; compute-matched to C.
+
 ## What this does NOT settle
 
 Even a clean A>C>base result here is *our* small-scale stack (mini model, ≤15 evals/seed,
